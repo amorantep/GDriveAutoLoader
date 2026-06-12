@@ -1,257 +1,314 @@
+"""
+uploader.py - Google Drive upload logic for GDrive AutoLoader.
+
+Key features
+  - MD5 calculation by streaming chunks (memory-safe)
+  - Simple upload  (<= 5 MB)
+  - Resumable upload (> 5 MB)
+  - Duplicate detection: skip if same name AND same MD5 already in Drive
+  - Exponential back-off on HTTP 429 / 5xx
+  - Configurable delay between successive uploads
+  - UploadJob dataclass + run_upload_job async generator
+"""
+
+from __future__ import annotations
+
 import asyncio
 import hashlib
-import io
+import logging
 import mimetypes
-import os
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import AsyncGenerator, Dict, List, Optional
 
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
 
-CHUNK_SIZE = 8 * 1024 * 1024  # 8MB chunks
-SMALL_FILE_THRESHOLD = 5 * 1024 * 1024  # 5MB
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+CHUNK_SIZE = 256 * 1024              # 256 KB — must be a multiple of 256 KB for Drive
+SIMPLE_UPLOAD_THRESHOLD = 5 * 1024 * 1024  # 5 MB
+MD5_READ_CHUNK = 1024 * 1024         # 1 MB chunks for hashing
 
 
-def calculate_md5(filepath: str) -> str:
-    md5 = hashlib.md5()
-    with open(filepath, "rb") as f:
-        while chunk := f.read(65536):
-            md5.update(chunk)
-    return md5.hexdigest()
+# ---------------------------------------------------------------------------
+# MD5 helper
+# ---------------------------------------------------------------------------
+
+def calculate_md5(filepath) -> str:
+    """Stream *filepath* in chunks and return its lowercase hex MD5 digest."""
+    h = hashlib.md5()
+    with open(filepath, "rb") as fh:
+        while True:
+            buf = fh.read(MD5_READ_CHUNK)
+            if not buf:
+                break
+            h.update(buf)
+    return h.hexdigest()
 
 
-def get_drive_service(credentials):
-    return build("drive", "v3", credentials=credentials)
+# ---------------------------------------------------------------------------
+# Drive service
+# ---------------------------------------------------------------------------
 
+def get_drive_service(credentials: Credentials):
+    """Return an authorised Google Drive v3 service object."""
+    return build("drive", "v3", credentials=credentials, cache_discovery=False)
+
+
+# ---------------------------------------------------------------------------
+# Drive queries
+# ---------------------------------------------------------------------------
 
 def list_drive_folders(service, parent_id: str = "root") -> List[Dict]:
+    """
+    Return a list of folder metadata dicts directly inside *parent_id*.
+    Each dict contains: id, name, modifiedTime.
+    """
+    query = (
+        f"'{parent_id}' in parents "
+        "and mimeType = 'application/vnd.google-apps.folder' "
+        "and trashed = false"
+    )
     results = []
     page_token = None
-    query = f"'{parent_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+
     while True:
-        params = {
+        kwargs: dict = {
             "q": query,
-            "fields": "nextPageToken, files(id, name, parents)",
-            "pageSize": 100,
+            "spaces": "drive",
+            "fields": "nextPageToken, files(id, name, modifiedTime)",
+            "pageSize": 200,
             "orderBy": "name",
         }
         if page_token:
-            params["pageToken"] = page_token
-        response = service.files().list(**params).execute()
+            kwargs["pageToken"] = page_token
+
+        response = service.files().list(**kwargs).execute()
         results.extend(response.get("files", []))
         page_token = response.get("nextPageToken")
         if not page_token:
             break
+
     return results
 
 
-def check_file_exists_in_drive(service, filename: str, folder_id: str):
+def check_file_exists_in_drive(
+    service, filename: str, folder_id: str
+):
+    """
+    Check whether *filename* already exists inside *folder_id* in Drive.
+    Returns (exists: bool, md5: str | None).
+    """
     safe_name = filename.replace("'", "\\'")
-    query = f"name = '{safe_name}' and '{folder_id}' in parents and trashed = false"
-    response = service.files().list(
-        q=query, fields="files(id, name, md5Checksum)", pageSize=10
-    ).execute()
+    query = (
+        f"name = '{safe_name}' "
+        f"and '{folder_id}' in parents "
+        "and trashed = false"
+    )
+    response = (
+        service.files()
+        .list(
+            q=query,
+            spaces="drive",
+            fields="files(id, name, md5Checksum)",
+            pageSize=1,
+        )
+        .execute()
+    )
     files = response.get("files", [])
     if not files:
         return False, None
-    md5 = files[0].get("md5Checksum")
-    return True, md5
+    return True, files[0].get("md5Checksum")
 
 
-def _get_mime_type(filepath: str) -> str:
-    mime, _ = mimetypes.guess_type(filepath)
+# ---------------------------------------------------------------------------
+# Upload helpers
+# ---------------------------------------------------------------------------
+
+def _guess_mime(filepath) -> str:
+    mime, _ = mimetypes.guess_type(str(filepath))
     return mime or "application/octet-stream"
 
 
-def upload_file_simple(service, filepath: str, folder_id: str, mime_type: str) -> Dict:
-    file_metadata = {"name": Path(filepath).name, "parents": [folder_id]}
-    media = MediaFileUpload(filepath, mimetype=mime_type, resumable=False)
-    uploaded = service.files().create(
-        body=file_metadata,
-        media_body=media,
-        fields="id, name, md5Checksum, size",
-    ).execute()
+def upload_file_simple(service, filepath, folder_id: str, mime_type: Optional[str] = None) -> Dict:
+    """Upload a small file using the simple (non-resumable) method."""
+    filepath = Path(filepath)
+    mime_type = mime_type or _guess_mime(filepath)
+    file_metadata = {"name": filepath.name, "parents": [folder_id]}
+    media = MediaFileUpload(str(filepath), mimetype=mime_type, resumable=False)
+    return (
+        service.files()
+        .create(body=file_metadata, media_body=media, fields="id, name, md5Checksum")
+        .execute()
+    )
+
+
+def upload_file_resumable(service, filepath, folder_id: str, mime_type: Optional[str] = None) -> Dict:
+    """Upload a large file using Drive's resumable upload protocol."""
+    filepath = Path(filepath)
+    mime_type = mime_type or _guess_mime(filepath)
+    file_metadata = {"name": filepath.name, "parents": [folder_id]}
+
+    with open(filepath, "rb") as fh:
+        media = MediaIoBaseUpload(fh, mimetype=mime_type, chunksize=CHUNK_SIZE, resumable=True)
+        request = service.files().create(
+            body=file_metadata, media_body=media, fields="id, name, md5Checksum"
+        )
+        uploaded = None
+        while uploaded is None:
+            _, uploaded = request.next_chunk()
+
     return uploaded
 
 
-def upload_file_resumable(service, filepath: str, folder_id: str, mime_type: str) -> Dict:
-    file_metadata = {"name": Path(filepath).name, "parents": [folder_id]}
-    media = MediaFileUpload(filepath, mimetype=mime_type, resumable=True, chunksize=CHUNK_SIZE)
-    request = service.files().create(
-        body=file_metadata,
-        media_body=media,
-        fields="id, name, md5Checksum, size",
-    )
-    response = None
-    while response is None:
-        _, response = request.next_chunk()
-    return response
+def upload_file(service, filepath, folder_id: str, delay_ms: int = 500) -> Dict:
+    """
+    Upload *filepath* to *folder_id*, choosing simple vs resumable by size.
+    Handles HTTP 429 / 5xx with exponential back-off (up to 5 retries).
+    """
+    filepath = Path(filepath)
+    file_size = filepath.stat().st_size
+    mime_type = _guess_mime(filepath)
+    max_retries = 5
+    backoff = 2.0
 
-
-def upload_file(service, filepath: str, folder_id: str, delay_ms: int = 500) -> Dict:
-    size = os.path.getsize(filepath)
-    mime_type = _get_mime_type(filepath)
-    max_retries = 7
-    base_delay = 1.0
-    for attempt in range(max_retries):
+    for attempt in range(max_retries + 1):
         try:
-            if size <= SMALL_FILE_THRESHOLD:
+            if file_size <= SIMPLE_UPLOAD_THRESHOLD:
                 result = upload_file_simple(service, filepath, folder_id, mime_type)
             else:
                 result = upload_file_resumable(service, filepath, folder_id, mime_type)
+
             if delay_ms > 0:
                 time.sleep(delay_ms / 1000.0)
             return result
-        except HttpError as e:
-            if e.resp.status == 429:
-                wait = base_delay * (2 ** attempt)
+
+        except HttpError as exc:
+            status = exc.resp.status if exc.resp else 0
+            if status in (429, 500, 502, 503, 504) and attempt < max_retries:
+                wait = backoff * (2 ** attempt)
+                logger.warning(
+                    "Drive API %s for %s — retrying in %.1fs (attempt %d/%d)",
+                    status, filepath.name, wait, attempt + 1, max_retries,
+                )
                 time.sleep(wait)
-            else:
-                raise
-    raise RuntimeError(f"Failed to upload {filepath} after {max_retries} attempts")
+                continue
+            raise
 
 
-@dataclass
-class UploadResult:
-    filename: str
-    size: int
-    local_md5: str
-    drive_md5: Optional[str]
-    status: str  # "ok", "failed", "skipped"
-    timestamp: str
-    error: Optional[str] = None
-
+# ---------------------------------------------------------------------------
+# UploadJob
+# ---------------------------------------------------------------------------
 
 @dataclass
 class UploadJob:
+    """Tracks the state of a batch upload operation."""
+
     job_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     files: List[Dict] = field(default_factory=list)
     destination_folder_id: str = ""
     delay_ms: int = 500
-    results: List[UploadResult] = field(default_factory=list)
+    results: List[Dict] = field(default_factory=list)
     current_index: int = 0
-    status: str = "pending"  # pending, running, completed, failed
+    status: str = "pending"  # pending | running | done | error
+    # asyncio.Queue used to fan-out SSE events to the progress endpoint
     events: asyncio.Queue = field(default_factory=asyncio.Queue)
 
-    def to_dict(self):
+    @classmethod
+    def create(cls, files: List[Dict], destination_folder_id: str, delay_ms: int = 500) -> "UploadJob":
+        return cls(files=files, destination_folder_id=destination_folder_id, delay_ms=delay_ms)
+
+    def to_dict(self) -> Dict:
         return {
             "job_id": self.job_id,
             "status": self.status,
             "total": len(self.files),
-            "current_index": self.current_index,
-            "results": [
-                {
-                    "filename": r.filename,
-                    "size": r.size,
-                    "local_md5": r.local_md5,
-                    "drive_md5": r.drive_md5,
-                    "status": r.status,
-                    "timestamp": r.timestamp,
-                    "error": r.error,
-                }
-                for r in self.results
-            ],
+            "completed": len(self.results),
+            "results": self.results,
         }
 
 
 async def run_upload_job(job: UploadJob, credentials) -> None:
-    import datetime
+    """
+    Process all files in *job* serially.
 
+    Progress events are pushed into job.events (an asyncio.Queue).
+    Each event dict has schema:
+        {
+            "file":       str,
+            "index":      int,   # 1-based
+            "total":      int,
+            "status":     "skipped" | "uploaded" | "error",
+            "local_md5":  str | None,
+            "drive_md5":  str | None,
+            "size":       int,
+            "timestamp":  str,   # ISO-8601 UTC
+        }
+    A sentinel {"done": True} is pushed when the job finishes.
+    """
     loop = asyncio.get_event_loop()
     job.status = "running"
     service = await loop.run_in_executor(None, lambda: get_drive_service(credentials))
+    total = len(job.files)
 
     for i, file_info in enumerate(job.files):
         job.current_index = i
         filepath = file_info["path"]
-        filename = file_info["name"]
-        size = file_info["size"]
-        timestamp = datetime.datetime.utcnow().isoformat() + "Z"
+        filename = file_info.get("name") or Path(filepath).name
+        size = file_info.get("size", 0)
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        event: Dict = {
+            "file": filename,
+            "index": i + 1,
+            "total": total,
+            "status": "error",
+            "local_md5": None,
+            "drive_md5": None,
+            "size": size,
+            "timestamp": timestamp,
+        }
 
         try:
-            local_md5 = await loop.run_in_executor(None, lambda fp=filepath: calculate_md5(fp))
+            local_md5 = await loop.run_in_executor(
+                None, lambda fp=filepath: calculate_md5(fp)
+            )
+            event["local_md5"] = local_md5
+
             exists, drive_md5 = await loop.run_in_executor(
                 None,
                 lambda fn=filename: check_file_exists_in_drive(service, fn, job.destination_folder_id),
             )
 
-            if exists and drive_md5 and drive_md5 == local_md5:
-                result = UploadResult(
-                    filename=filename,
-                    size=size,
-                    local_md5=local_md5,
-                    drive_md5=drive_md5,
-                    status="skipped",
-                    timestamp=timestamp,
+            if exists and drive_md5 and drive_md5.lower() == local_md5.lower():
+                event["status"] = "skipped"
+                event["drive_md5"] = drive_md5
+            else:
+                uploaded = await loop.run_in_executor(
+                    None,
+                    lambda fp=filepath: upload_file(service, fp, job.destination_folder_id, job.delay_ms),
                 )
-                job.results.append(result)
-                await job.events.put({
-                    "file": filename,
-                    "index": i,
-                    "total": len(job.files),
-                    "status": "skipped",
-                    "local_md5": local_md5,
-                    "drive_md5": drive_md5,
-                    "size": size,
-                    "timestamp": timestamp,
-                })
-                continue
+                event["status"] = "uploaded"
+                event["drive_md5"] = uploaded.get("md5Checksum")
 
-            uploaded = await loop.run_in_executor(
-                None,
-                lambda fp=filepath: upload_file(service, fp, job.destination_folder_id, job.delay_ms),
-            )
-            drive_md5_result = uploaded.get("md5Checksum")
-            ok = drive_md5_result == local_md5 if drive_md5_result else False
-            status = "ok" if ok else "failed"
+        except Exception as exc:
+            logger.exception("Failed to upload %s: %s", filename, exc)
+            event["status"] = "error"
+            event["error"] = str(exc)
 
-            result = UploadResult(
-                filename=filename,
-                size=size,
-                local_md5=local_md5,
-                drive_md5=drive_md5_result,
-                status=status,
-                timestamp=timestamp,
-            )
-            job.results.append(result)
-            await job.events.put({
-                "file": filename,
-                "index": i,
-                "total": len(job.files),
-                "status": status,
-                "local_md5": local_md5,
-                "drive_md5": drive_md5_result,
-                "size": size,
-                "timestamp": timestamp,
-            })
+        job.results.append(event)
+        await job.events.put(event)
+        await asyncio.sleep(0)
 
-        except Exception as e:
-            result = UploadResult(
-                filename=filename,
-                size=size,
-                local_md5="",
-                drive_md5=None,
-                status="failed",
-                timestamp=timestamp,
-                error=str(e),
-            )
-            job.results.append(result)
-            await job.events.put({
-                "file": filename,
-                "index": i,
-                "total": len(job.files),
-                "status": "failed",
-                "local_md5": "",
-                "drive_md5": None,
-                "size": size,
-                "timestamp": timestamp,
-                "error": str(e),
-            })
-
-    job.status = "completed"
+    job.status = "done"
     await job.events.put({"done": True})

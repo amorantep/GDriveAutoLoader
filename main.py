@@ -22,6 +22,7 @@ import io
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -38,7 +39,7 @@ from pydantic import BaseModel
 
 import auth
 import uploader
-from uploader import UploadJob, run_upload_job
+from uploader import UploadJob
 
 load_dotenv()
 
@@ -61,8 +62,6 @@ app.add_middleware(
 
 # In-memory job store  {job_id: UploadJob}
 _jobs: Dict[str, UploadJob] = {}
-# Per-job asyncio queues for SSE fan-out  {job_id: asyncio.Queue}
-_job_queues: Dict[str, asyncio.Queue] = {}
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -87,11 +86,29 @@ class UploadStartRequest(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
+_DATE_RE_DASHED = re.compile(r"^(\d{4})-(\d{2})-(\d{2})")
+_DATE_RE_PLAIN  = re.compile(r"^(\d{8})")
+
+
+def _smart_name_key(name: str) -> str:
+    """
+    Sort key for filenames.
+    Names starting with YYYY-MM-DD or YYYYMMDD sort chronologically first.
+    """
+    m = _DATE_RE_DASHED.match(name)
+    if m:
+        return f"0_{m.group(1)}{m.group(2)}{m.group(3)}_{name.lower()}"
+    m = _DATE_RE_PLAIN.match(name)
+    if m:
+        return f"0_{m.group(1)}_{name.lower()}"
+    return f"1_{name.lower()}"
+
 
 def _file_meta(p: Path) -> Dict:
     """Return a metadata dict for a local file."""
     stat = p.stat()
-    mime, _ = __import__("mimetypes").guess_type(str(p))
+    import mimetypes
+    mime, _ = mimetypes.guess_type(str(p))
     return {
         "name": p.name,
         "path": str(p),
@@ -110,50 +127,16 @@ def _sort_key(item: Dict, sort_by: str):
         return item.get(sort_by, "")
     if sort_by == "mime":
         return item.get("mime", "").lower()
-    # Default: name — smart date extraction
     return _smart_name_key(item.get("name", ""))
 
 
-def _smart_name_key(name: str) -> str:
-    """
-    Sort key for filenames.
-    Filenames starting with YYYY-MM-DD or YYYYMMDD are sorted chronologically
-    before other names.
-    """
-    import re
-    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", name)
-    if m:
-        return f"0_{m.group(1)}{m.group(2)}{m.group(3)}_{name.lower()}"
-    m = re.match(r"^(\d{8})", name)
-    if m:
-        return f"0_{m.group(1)}_{name.lower()}"
-    return f"1_{name.lower()}"
-
-
 def _get_redirect_uri(request: Request) -> str:
-    """Build the OAuth redirect URI from the incoming request or env var."""
+    """Build the OAuth redirect URI from env var or the incoming request."""
     env_uri = os.getenv("REDIRECT_URI", "").strip()
     if env_uri:
         return env_uri
     base = str(request.base_url).rstrip("/")
     return f"{base}/auth/callback"
-
-
-async def _run_job_and_notify(job: UploadJob, credentials) -> None:
-    """Background coroutine: run the upload job and push events into its queue."""
-    queue = _job_queues.get(job.job_id)
-    try:
-        async for event in run_upload_job(job, credentials):
-            if queue:
-                await queue.put(event)
-    except Exception as exc:
-        logger.exception("Job %s failed: %s", job.job_id, exc)
-        job.status = "error"
-        if queue:
-            await queue.put({"status": "error", "error": str(exc)})
-    finally:
-        if queue:
-            await queue.put(None)  # Sentinel — signals end of stream
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +163,7 @@ async def auth_login(request: Request):
     redirect_uri = _get_redirect_uri(request)
     try:
         authorization_url, _state = auth.start_auth_flow(redirect_uri)
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     return RedirectResponse(url=authorization_url)
 
@@ -290,9 +273,8 @@ async def upload_start(body: UploadStartRequest, background_tasks: BackgroundTas
         delay_ms=max(0, body.delay_ms),
     )
     _jobs[job.job_id] = job
-    _job_queues[job.job_id] = asyncio.Queue()
 
-    background_tasks.add_task(_run_job_and_notify, job, creds)
+    background_tasks.add_task(uploader.run_upload_job, job, creds)
 
     return {"job_id": job.job_id, "total": len(body.files)}
 
@@ -307,12 +289,9 @@ async def upload_progress(job_id: str):
       progress   — one per file processed
       done       — emitted when the job finishes
     """
-    if job_id not in _jobs:
+    job = _jobs.get(job_id)
+    if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-
-    queue = _job_queues.get(job_id)
-    if queue is None:
-        raise HTTPException(status_code=404, detail="Job queue not found")
 
     async def event_generator():
         # Notify client that the stream is live
@@ -320,15 +299,13 @@ async def upload_progress(job_id: str):
 
         while True:
             try:
-                event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                event = await asyncio.wait_for(job.events.get(), timeout=30.0)
             except asyncio.TimeoutError:
                 # Keep-alive comment to prevent proxy timeouts
                 yield ": keepalive\n\n"
                 continue
 
-            if event is None:
-                # Sentinel — job finished
-                job = _jobs[job_id]
+            if event.get("done"):
                 yield f"event: done\ndata: {json.dumps({'status': job.status})}\n\n"
                 break
 
@@ -350,14 +327,7 @@ async def upload_report(job_id: str):
     job = _jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-
-    return {
-        "job_id": job_id,
-        "status": job.status,
-        "total": len(job.files),
-        "completed": len(job.results),
-        "results": job.results,
-    }
+    return job.to_dict()
 
 
 @app.get("/upload/report/{job_id}/csv")
