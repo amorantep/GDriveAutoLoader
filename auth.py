@@ -1,147 +1,91 @@
-"""
-Google OAuth2 authentication module for GDrive AutoLoader.
-Uses google-auth-oauthlib for the OAuth flow.
-Credentials are stored in credentials.json (client secrets) and token.json (user token).
-Falls back to GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET env vars if credentials.json is absent.
-"""
-
 import json
 import os
-import secrets
 from pathlib import Path
 from typing import Optional, Tuple
 
+from dotenv import load_dotenv
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
-from googleapiclient.discovery import build
+
+load_dotenv()
 
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-
-CREDENTIALS_FILE = Path("credentials.json")
 TOKEN_FILE = Path("token.json")
+CREDENTIALS_FILE = Path("credentials.json")
+
+_pending_flow: Optional[Flow] = None
 
 
-def _credentials_file_exists() -> bool:
-    return CREDENTIALS_FILE.exists() and CREDENTIALS_FILE.stat().st_size > 0
-
-
-def _build_flow(redirect_uri: str) -> Flow:
-    """
-    Create a google_auth_oauthlib Flow.
-    Prefers credentials.json; falls back to env vars GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET.
-    """
-    if _credentials_file_exists():
-        return Flow.from_client_secrets_file(
-            str(CREDENTIALS_FILE),
-            scopes=SCOPES,
-            redirect_uri=redirect_uri,
-        )
-
-    client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
-    client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+def _get_client_config() -> dict:
+    if CREDENTIALS_FILE.exists():
+        with open(CREDENTIALS_FILE) as f:
+            return json.load(f)
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
     if not client_id or not client_secret:
-        raise FileNotFoundError(
-            "credentials.json not found and GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET "
-            "env vars are not set. Download credentials.json from Google Cloud Console "
-            "(APIs & Services > Credentials > OAuth 2.0 Client IDs > Download JSON) "
-            "or set the env vars in your .env file."
+        raise ValueError(
+            "No credentials.json found and GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET env vars not set"
         )
-    client_config = {
+    return {
         "web": {
             "client_id": client_id,
             "client_secret": client_secret,
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": [redirect_uri],
+            "redirect_uris": [os.getenv("REDIRECT_URI", "http://localhost:8000/auth/callback")],
         }
     }
-    return Flow.from_client_config(client_config, scopes=SCOPES, redirect_uri=redirect_uri)
 
 
 def get_credentials() -> Optional[Credentials]:
-    """
-    Load credentials from token.json if it exists and is valid.
-    Refreshes the token automatically if expired.
-    Returns None if no valid credentials are available.
-    """
     if not TOKEN_FILE.exists():
         return None
-
-    try:
-        creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
-    except Exception:
-        return None
-
-    if creds and creds.valid:
-        return creds
-
+    creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
     if creds and creds.expired and creds.refresh_token:
         try:
             creds.refresh(Request())
             _save_token(creds)
-            return creds
         except Exception:
-            TOKEN_FILE.unlink(missing_ok=True)
             return None
-
+    if creds and creds.valid:
+        return creds
     return None
 
 
 def is_authenticated() -> bool:
-    """Return True if we have valid (or refreshable) credentials."""
-    return get_credentials() is not None
+    creds = get_credentials()
+    return creds is not None and creds.valid
 
 
-def start_oauth_flow(redirect_uri: str) -> Tuple[str, str]:
-    """
-    Build the OAuth2 authorization URL and return (auth_url, state).
-    The state value is stored server-side to verify the callback (CSRF protection).
-    """
-    state = secrets.token_urlsafe(32)
-    flow = _build_flow(redirect_uri)
+def _save_token(creds: Credentials) -> None:
+    with open(TOKEN_FILE, "w") as f:
+        f.write(creds.to_json())
+
+
+def start_auth_flow(redirect_uri: str) -> str:
+    global _pending_flow
+    client_config = _get_client_config()
+    flow = Flow.from_client_config(client_config, scopes=SCOPES, redirect_uri=redirect_uri)
+    _pending_flow = flow
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
-        prompt="consent",  # Always request refresh_token
-        state=state,
+        prompt="consent",
     )
-    return auth_url, state
+    return auth_url
 
 
-def exchange_code(code: str, redirect_uri: str, state: str = None) -> Credentials:
-    """
-    Exchange the authorization code for credentials and persist them to token.json.
-    Returns the resulting Credentials object.
-    """
-    flow = _build_flow(redirect_uri)
+def handle_callback(code: str, state: Optional[str] = None) -> Credentials:
+    global _pending_flow
+    if _pending_flow is None:
+        redirect_uri = os.getenv("REDIRECT_URI", "http://localhost:8000/auth/callback")
+        client_config = _get_client_config()
+        flow = Flow.from_client_config(client_config, scopes=SCOPES, redirect_uri=redirect_uri)
+    else:
+        flow = _pending_flow
+        _pending_flow = None
     flow.fetch_token(code=code)
     creds = flow.credentials
     _save_token(creds)
     return creds
-
-
-def _save_token(creds: Credentials) -> None:
-    """Persist credentials to token.json."""
-    token_data = {
-        "token": creds.token,
-        "refresh_token": creds.refresh_token,
-        "token_uri": creds.token_uri,
-        "client_id": creds.client_id,
-        "client_secret": creds.client_secret,
-        "scopes": list(creds.scopes) if creds.scopes else SCOPES,
-    }
-    TOKEN_FILE.write_text(json.dumps(token_data, indent=2))
-
-
-def get_drive_service():
-    """Build and return a Drive v3 service using stored credentials."""
-    creds = get_credentials()
-    if not creds:
-        raise RuntimeError("Not authenticated. Complete the OAuth flow first.")
-    return build("drive", "v3", credentials=creds)
-
-
-def revoke_credentials() -> None:
-    """Delete the stored token, effectively logging the user out."""
-    TOKEN_FILE.unlink(missing_ok=True)
