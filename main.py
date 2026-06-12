@@ -162,7 +162,7 @@ async def auth_login(request: Request):
     """Redirect the browser to Google's OAuth consent screen."""
     redirect_uri = _get_redirect_uri(request)
     try:
-        authorization_url, _state = auth.start_auth_flow(redirect_uri)
+        authorization_url, _state = auth.start_auth_flow(redirect_uri)  # noqa: F841
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     return RedirectResponse(url=authorization_url)
@@ -183,7 +183,7 @@ async def auth_callback(
 
     redirect_uri = _get_redirect_uri(request)
     try:
-        auth.handle_callback(code=code, redirect_uri=redirect_uri)
+        auth.handle_callback(code=code, redirect_uri=redirect_uri, state=state)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

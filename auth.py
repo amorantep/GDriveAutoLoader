@@ -83,6 +83,12 @@ def _save_credentials(creds: Credentials) -> None:
 
 
 # ---------------------------------------------------------------------------
+# In-memory flow store (keyed by state) to survive the OAuth redirect round-trip
+# ---------------------------------------------------------------------------
+
+_pending_flows: dict[str, Flow] = {}
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -126,7 +132,8 @@ def start_auth_flow(redirect_uri: str) -> Tuple[str, str]:
     """
     Initialise an OAuth2 flow and return (authorization_url, state).
 
-    The caller should redirect the user's browser to the returned URL.
+    The flow object is stored in _pending_flows so that handle_callback
+    can reuse it — this preserves any PKCE code verifier generated internally.
     """
     client_config = _build_client_config()
 
@@ -141,23 +148,30 @@ def start_auth_flow(redirect_uri: str) -> Tuple[str, str]:
         include_granted_scopes="true",
         prompt="consent",
     )
+
+    # Persist the flow so the callback can reuse it (same code verifier)
+    _pending_flows[state] = flow
+
     return authorization_url, state
 
 
-def handle_callback(code: str, redirect_uri: str) -> Credentials:
+def handle_callback(code: str, redirect_uri: str, state: Optional[str] = None) -> Credentials:
     """
     Exchange an authorisation code for tokens and persist them.
 
-    Returns the resulting Credentials object.
-    Raises ValueError / google.auth exceptions on failure.
+    Reuses the original Flow (identified by state) to keep the PKCE verifier intact.
+    Falls back to creating a new Flow if state is missing (e.g. during testing).
     """
-    client_config = _build_client_config()
+    flow = _pending_flows.pop(state, None) if state else None
 
-    flow = Flow.from_client_config(
-        client_config,
-        scopes=SCOPES,
-        redirect_uri=redirect_uri,
-    )
+    if flow is None:
+        # Fallback: create a plain flow without PKCE
+        client_config = _build_client_config()
+        flow = Flow.from_client_config(
+            client_config,
+            scopes=SCOPES,
+            redirect_uri=redirect_uri,
+        )
 
     flow.fetch_token(code=code)
     creds = flow.credentials
