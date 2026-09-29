@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "nota": "Votaciones del bloque expositivo. Sin backend: la app muestra la pantalla del Modo A y las opciones a pantalla completa; el voto se hace con una encuesta de Zoom. El docente puede escribir los conteos para mostrar las barras y luego revela las zonas.",
+  "votaciones": [
+    { "orden": 1, "dimension": "UX", "decision": "ONB-02", "pantalla": "colaborador/onboarding-aceptacion", "pregunta": "Eres el DPO. ¿Qué cambias en esta pantalla?" },
+    { "orden": 2, "dimension": "CAN", "decision": "ONB-01", "pantalla": "colaborador/onboarding-registro", "pregunta": "¿Qué campos deberían ser obligatorios?" },
+    { "orden": 3, "dimension": "ALC", "decision": "ASI-03", "pantalla": "colaborador/asistencia", "pregunta": "¿Cuándo debería registrar la app la ubicación?" },
+    { "orden": 4, "dimension": "PLA", "decision": "ASI-02", "pantalla": "supervisor/ficha-lucia", "pregunta": "Lucía cesó en junio. ¿Qué pasa con su plantilla facial?" },
+    { "orden": 5, "dimension": "ACC", "decision": "PER-01", "pantalla": "supervisor/directorio", "pregunta": "¿Quién debería ver el celular personal?" }
+  ]
+}

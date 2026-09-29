@@ -1,0 +1,84 @@
+{
+  "version": "1.0.0",
+  "nota": "Los eventos se desbloquean con un código que el docente envía a todas las salas (en Zoom: «Transmitir mensaje a todas las salas»). Los efectos se suman a los indicadores del grupo después del cálculo base. Todos los eventos son ficticios y el Panel debe rotularlos así.",
+  "eventos": [
+    {
+      "id": "EV-01",
+      "codigo": "NUBE48",
+      "titulo": "Brecha en el proveedor cloud",
+      "texto": "El proveedor cloud informa que un atacante exfiltró copias de respaldo con plantillas faciales e historial de ubicación de los colaboradores.",
+      "ponePrueba": ["ASI-02", "ASI-05"],
+      "efectos": [
+        { "decision": "ASI-02", "opciones": ["a", "b"], "delta": { "RT": -15, "RP": -15, "EL": -10 } },
+        { "decision": "ASI-02", "opciones": ["c"], "delta": { "RT": -5, "RP": -5 } },
+        { "decision": "ASI-05", "opciones": ["a"], "delta": { "RT": -15, "RP": -10 } },
+        { "decision": "ASI-05", "opciones": ["b"], "delta": { "RT": -8, "RP": -5 } },
+        { "decision": "ASI-05", "opciones": ["c"], "delta": { "RT": -3 } }
+      ],
+      "mensajeSinDatos": "El atacante no encontró plantillas ni historial: su configuración no los conservaba.",
+      "pregunta": "¿Qué deben notificar, a quién y en qué plazo? (Reglamento DS 016-2024-JUS, art. 34: 48 horas a la ANPD)",
+      "uso": "plenaria"
+    },
+    {
+      "id": "EV-02",
+      "codigo": "LUCIA20",
+      "titulo": "Solicitud de acceso de una ex colaboradora",
+      "texto": "Lucía Paredes, cesada hace tres meses, pide todo lo que la empresa conserva sobre ella.",
+      "ponePrueba": ["PER-04", "ASI-02", "ASI-05", "IA-03"],
+      "dossier": [
+        { "decision": "PER-04", "opciones": ["a", "b"], "item": "Perfil completo con celular, domicilio y foto" },
+        { "decision": "ASI-02", "opciones": ["a", "b"], "item": "Plantilla facial biométrica" },
+        { "decision": "ASI-05", "opciones": ["a", "b"], "item": "Historial de ubicaciones con coordenadas" },
+        { "decision": "ASI-05", "opciones": ["c"], "item": "Historial de ubicaciones de los últimos 90 días de su relación laboral" },
+        { "decision": "IA-03", "opciones": ["a", "b", "c"], "item": "Puntajes de productividad generados por el asistente de IA" },
+        { "decision": "IA-01", "opciones": ["a"], "item": "Resúmenes de todos sus correos y chats" }
+      ],
+      "efectoPorItem": { "RT": -4, "RP": -3 },
+      "pregunta": "¿Se sienten cómodos entregándole esto? ¿Qué no debería existir? (Reglamento, arts. 69.2 y 75)",
+      "uso": "plenaria"
+    },
+    {
+      "id": "EV-03",
+      "codigo": "SINDI3",
+      "titulo": "Carta del sindicato y publicación en redes",
+      "texto": "El sindicato envía una carta notarial y publica en redes que «la app espía a los trabajadores».",
+      "ponePrueba": ["ASI-03", "ASI-04", "ONB-02"],
+      "efectos": [
+        { "decision": "ASI-03", "opciones": ["a"], "delta": { "AC": -15, "RP": -15 } },
+        { "decision": "ASI-03", "opciones": ["b"], "delta": { "AC": -8, "RP": -5 } },
+        { "decision": "ASI-04", "opciones": ["a"], "delta": { "AC": -12, "RP": -8 } },
+        { "decision": "ONB-02", "opciones": ["a", "b"], "delta": { "AC": -5, "RP": -5 } }
+      ],
+      "pregunta": "¿Qué default defienden y cuál cambian?",
+      "uso": "taller"
+    },
+    {
+      "id": "EV-04",
+      "codigo": "ANPD25",
+      "titulo": "Requerimiento de la ANPD",
+      "texto": "La ANPD requiere evidencia de minimización y control de accesos de la App del Colaborador en un plazo de 10 días.",
+      "ponePrueba": ["todas"],
+      "checklistEvidencia": [
+        { "id": "consentimiento", "etiqueta": "Registro de consentimiento versionado" },
+        { "id": "matriz", "etiqueta": "Matriz de visibilidad y acceso por rol" },
+        { "id": "logs", "etiqueta": "Logs de acceso con conservación mínima de 2 años (art. 46.3)" },
+        { "id": "retencion", "etiqueta": "Política de retención y constancias de supresión" },
+        { "id": "contrato", "etiqueta": "Contrato con el proveedor cloud y de IA (arts. 29–30)" }
+      ],
+      "efectoPorFaltante": { "EL": -6 },
+      "pregunta": "¿Qué evidencia entregan? (puente con S25)",
+      "uso": "transicion-S25"
+    },
+    {
+      "id": "EV-05",
+      "codigo": "RIESGO5",
+      "titulo": "Presión del negocio tras un accidente",
+      "texto": "Tras un accidente en campo, la gerencia exige activar GPS continuo y mapa en vivo para todos los colaboradores, desde mañana.",
+      "ponePrueba": ["ASI-03", "ASI-04"],
+      "efectos": [],
+      "reabre": ["ASI-03", "ASI-04"],
+      "pregunta": "¿Cómo responden a un pedido legítimo sin renunciar a la privacidad por defecto?",
+      "uso": "taller"
+    }
+  ]
+}

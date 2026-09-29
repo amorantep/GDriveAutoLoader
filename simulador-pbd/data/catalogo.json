@@ -1,0 +1,413 @@
+{
+  "version": "1.0.0",
+  "nota": "Fuente de verdad del simulador. Las pantallas y el motor de indicadores se derivan de este archivo. Los efectos (-2 a +2) son valores de diseño docente, no mediciones reales.",
+  "indicadores": [
+    { "id": "RT", "nombre": "Protección del titular", "descripcion": "Qué tan protegido queda el colaborador frente a vigilancia, inferencias y acceso de terceros." },
+    { "id": "EL", "nombre": "Solidez legal", "descripcion": "Qué tan defendible es la configuración ante la ANPD, SUNAFIL o un juez." },
+    { "id": "UO", "nombre": "Utilidad operativa", "descripcion": "Si la función sigue sirviendo a su propósito (control, seguridad, productividad)." },
+    { "id": "CI", "nombre": "Viabilidad de costo", "descripcion": "Qué tan barato y simple es implementarlo y operarlo." },
+    { "id": "AC", "nombre": "Adopción y clima", "descripcion": "Confianza de los trabajadores y riesgo de conflicto laboral." },
+    { "id": "RP", "nombre": "Reputación", "descripcion": "Qué tan bien queda la organización si el tratamiento se hace público." }
+  ],
+  "zonas": {
+    "R": { "nombre": "Línea roja", "descripcion": "Incumple una obligación legal. No entra al balance de trade-offs.", "icono": "prohibido" },
+    "A": { "nombre": "Zona de criterio", "descripcion": "Opción lícita con costos y beneficios distintos. Aquí vive la discusión.", "icono": "balanza" },
+    "V": { "nombre": "Buena práctica", "descripcion": "Mejora el perfil de privacidad sin ser exigible.", "icono": "check" }
+  },
+  "dimensiones": [
+    { "id": "CAN", "nombre": "Cantidad de datos", "pregunta": "¿Qué se recoge sin que el titular haga nada?" },
+    { "id": "ALC", "nombre": "Alcance del tratamiento", "pregunta": "¿Para qué y con qué intensidad se usa?" },
+    { "id": "PLA", "nombre": "Plazo de conservación", "pregunta": "¿Cuánto dura antes de borrarse o anonimizarse?" },
+    { "id": "ACC", "nombre": "Accesibilidad", "pregunta": "¿Quién lo ve sin que el titular intervenga?" },
+    { "id": "UX", "nombre": "Patrones oscuros y consentimiento", "pregunta": "¿La interfaz empuja al titular hacia más tratamiento?" }
+  ],
+  "modulos": [
+    { "id": "ONB", "nombre": "Onboarding y registro" },
+    { "id": "PER", "nombre": "Perfil y directorio" },
+    { "id": "ASI", "nombre": "Asistencia: biometría y geolocalización" },
+    { "id": "SAL", "nombre": "Salud ocupacional" },
+    { "id": "IA", "nombre": "Asistente de IA (versión mínima)" }
+  ],
+  "decisiones": [
+    {
+      "id": "ONB-01",
+      "modulo": "ONB",
+      "dimension": "CAN",
+      "nucleo": false,
+      "titulo": "Campos del registro",
+      "pregunta": "¿Qué datos pide la app al registrarse?",
+      "hoepman": ["Minimizar"],
+      "normas": [
+        { "ref": "Ley 29733, arts. 7–8 (proporcionalidad y calidad)", "tipo": "obligacion-peru", "verificar": true },
+        { "ref": "Reglamento DS 016-2024-JUS, art. 132.1", "tipo": "obligacion-peru" },
+        { "ref": "RGPD, art. 5.1.c", "tipo": "referencia-ue" }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "Obligatorios: DNI, estado civil, n.º de hijos, domicilio, redes sociales y foto personal", "efectos": { "RT": -2, "EL": -2, "UO": 1, "CI": 1, "AC": -1, "RP": -1 } },
+        { "id": "b", "zona": "R", "etiqueta": "Mínimos, pero redes sociales obligatorias", "efectos": { "RT": -1, "EL": -2, "UO": 0, "CI": 1, "AC": -1, "RP": -1 } },
+        { "id": "c", "zona": "A", "etiqueta": "Todo opcional, pero el formulario lo presenta como si fuera obligatorio", "efectos": { "RT": 0, "EL": 0, "UO": 1, "CI": 1, "AC": 0, "RP": 0 } },
+        { "id": "d", "modo": "B", "zona": "V", "etiqueta": "Solo nombre, código, área y correo corporativo; contacto de emergencia opcional", "efectos": { "RT": 2, "EL": 2, "UO": 0, "CI": 1, "AC": 1, "RP": 1 } }
+      ],
+      "criterio": "Given un colaborador nuevo, When completa el registro, Then solo se le exigen nombre, código, área y correo corporativo, y ningún otro campo bloquea el avance.",
+      "evidencia": "Diccionario de datos del formulario con finalidad por campo."
+    },
+    {
+      "id": "ONB-02",
+      "modulo": "ONB",
+      "dimension": "UX",
+      "nucleo": true,
+      "titulo": "Pantalla de aceptación",
+      "pregunta": "¿Cómo se presenta la aceptación de finalidades?",
+      "hoepman": ["Informar", "Controlar"],
+      "normas": [
+        { "ref": "Reglamento DS 016-2024-JUS, arts. 5.1 y 6.1", "tipo": "obligacion-peru" },
+        { "ref": "Reglamento DS 016-2024-JUS, art. 9 (carga de la prueba)", "tipo": "obligacion-peru" },
+        { "ref": "EDPB, Directrices 03/2022 (patrones engañosos)", "tipo": "referencia-ue" }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "Un solo «Acepto todo», casillas premarcadas y «Rechazar» en gris y escondido", "patronOscuro": "Preselección y jerarquía visual engañosa", "efectos": { "RT": -2, "EL": -2, "UO": 1, "CI": 1, "AC": -1, "RP": -1 } },
+        { "id": "b", "zona": "R", "etiqueta": "Casillas premarcadas con un aviso de que puede desmarcarlas", "patronOscuro": "Preselección", "efectos": { "RT": -1, "EL": -2, "UO": 1, "CI": 1, "AC": -1, "RP": -1 } },
+        { "id": "c", "zona": "A", "etiqueta": "Casillas desmarcadas, pero el botón «Acepto todo» está destacado", "patronOscuro": "Jerarquía visual", "efectos": { "RT": 0, "EL": 0, "UO": 1, "CI": 1, "AC": 0, "RP": 0 } },
+        { "id": "d", "modo": "B", "zona": "V", "etiqueta": "Finalidades separadas y desmarcadas, botones de igual peso; lo que se basa en la relación laboral se informa, no se «consiente»", "efectos": { "RT": 2, "EL": 2, "UO": -1, "CI": 0, "AC": 2, "RP": 1 } }
+      ],
+      "criterio": "Given un colaborador nuevo en la pantalla de aceptación, When no toca ninguna casilla y pulsa «Continuar», Then ninguna finalidad opcional queda activa, y el sistema registra fecha, hora, versión del texto y finalidades aceptadas.",
+      "evidencia": "Registro de consentimiento versionado."
+    },
+    {
+      "id": "ONB-03",
+      "modulo": "ONB",
+      "dimension": "UX",
+      "nucleo": false,
+      "titulo": "Revocación del consentimiento",
+      "pregunta": "¿Cómo retira el colaborador un consentimiento opcional?",
+      "hoepman": ["Controlar"],
+      "normas": [
+        { "ref": "Reglamento DS 016-2024-JUS, art. 10.4", "tipo": "obligacion-peru" }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "Correo a RR. HH. con formulario firmado", "efectos": { "RT": -1, "EL": -2, "UO": 1, "CI": 1, "AC": -1, "RP": 0 } },
+        { "id": "b", "zona": "A", "etiqueta": "En la app, tras tres pantallas de confirmación", "patronOscuro": "Obstrucción", "efectos": { "RT": 0, "EL": 0, "UO": 1, "CI": 0, "AC": -1, "RP": 0 } },
+        { "id": "c", "modo": "B", "zona": "V", "etiqueta": "Interruptor en la app, en un paso y sin consecuencias laborales", "efectos": { "RT": 2, "EL": 2, "UO": -1, "CI": 0, "AC": 1, "RP": 1 } }
+      ],
+      "criterio": "Given un colaborador con una finalidad opcional activa, When la desactiva desde «Mis privacidades», Then el cambio es inmediato, no requiere confirmaciones adicionales y queda registrado.",
+      "evidencia": "Log de cambios de consentimiento."
+    },
+    {
+      "id": "PER-01",
+      "modulo": "PER",
+      "dimension": "ACC",
+      "nucleo": true,
+      "titulo": "Celular personal",
+      "pregunta": "¿Quién ve el celular personal del colaborador?",
+      "hoepman": ["Controlar", "Ocultar"],
+      "normas": [
+        { "ref": "Ley 29733, art. 7 (proporcionalidad)", "tipo": "obligacion-peru", "verificar": true },
+        { "ref": "Reglamento DS 016-2024-JUS, art. 132.1", "tipo": "obligacion-peru" },
+        { "ref": "RGPD, art. 25.2 (accesibilidad)", "tipo": "referencia-ue" }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "Visible para toda la empresa", "efectos": { "RT": -2, "EL": -2, "UO": 2, "CI": 1, "AC": -1, "RP": -1 } },
+        { "id": "b", "zona": "A", "etiqueta": "Visible para su equipo", "efectos": { "RT": -1, "EL": 0, "UO": 1, "CI": 1, "AC": 0, "RP": 0 } },
+        { "id": "c", "zona": "A", "etiqueta": "Visible solo para su supervisor", "efectos": { "RT": 0, "EL": 1, "UO": 1, "CI": 1, "AC": 0, "RP": 0 } },
+        { "id": "d", "modo": "B", "zona": "V", "etiqueta": "Oculto; el colaborador decide si lo muestra y a quién", "efectos": { "RT": 2, "EL": 2, "UO": -1, "CI": 0, "AC": 1, "RP": 1 } }
+      ],
+      "criterio": "Given un supervisor que abre el directorio, When consulta la ficha de un colaborador que no cambió sus opciones, Then ve nombre, área y correo corporativo, pero no el celular personal.",
+      "evidencia": "Matriz de visibilidad por rol versionada y revisión semestral de privilegios (Reglamento art. 46.1.c)."
+    },
+    {
+      "id": "PER-02",
+      "modulo": "PER",
+      "dimension": "ACC",
+      "nucleo": false,
+      "titulo": "Cumpleaños y foto",
+      "pregunta": "¿Qué se muestra de la fecha de nacimiento y la foto?",
+      "hoepman": ["Ocultar"],
+      "normas": [
+        { "ref": "Buena práctica de accesibilidad por defecto", "tipo": "buena-practica" }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "A", "etiqueta": "Fecha completa con año y foto visibles para todos", "efectos": { "RT": -1, "EL": -1, "UO": 0, "CI": 1, "AC": 0, "RP": 0 } },
+        { "id": "b", "zona": "A", "etiqueta": "Día y mes, sin año, visibles para el equipo", "efectos": { "RT": 0, "EL": 1, "UO": 0, "CI": 1, "AC": 1, "RP": 0 } },
+        { "id": "c", "modo": "B", "zona": "V", "etiqueta": "Nada visible; el colaborador puede activar día y mes", "efectos": { "RT": 1, "EL": 1, "UO": -1, "CI": 0, "AC": 0, "RP": 0 } }
+      ],
+      "criterio": "Given un colaborador que no cambió sus opciones, When otro colaborador abre su ficha, Then no ve fecha de nacimiento ni foto personal.",
+      "evidencia": "Matriz de visibilidad por rol."
+    },
+    {
+      "id": "PER-03",
+      "modulo": "PER",
+      "dimension": "ACC",
+      "nucleo": false,
+      "titulo": "Domicilio",
+      "pregunta": "¿Quién ve el domicilio del colaborador?",
+      "hoepman": ["Ocultar", "Separar"],
+      "normas": [
+        { "ref": "Reglamento DS 016-2024-JUS, art. 132.1", "tipo": "obligacion-peru" },
+        { "ref": "Ley 29733, art. 9 (seguridad)", "tipo": "obligacion-peru", "verificar": true }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "Visible para el supervisor y el equipo", "efectos": { "RT": -2, "EL": -2, "UO": 0, "CI": 1, "AC": -1, "RP": -1 } },
+        { "id": "b", "zona": "R", "etiqueta": "Visible para toda la empresa", "efectos": { "RT": -2, "EL": -2, "UO": 0, "CI": 1, "AC": -2, "RP": -2 } },
+        { "id": "c", "zona": "A", "etiqueta": "Visible solo para el supervisor (por ejemplo, para coordinar transporte al campamento)", "efectos": { "RT": -1, "EL": 0, "UO": 1, "CI": 1, "AC": 0, "RP": 0 }, "ajustesSector": { "mineria": { "UO": 2 } } },
+        { "id": "d", "modo": "B", "zona": "V", "etiqueta": "Solo RR. HH.", "efectos": { "RT": 2, "EL": 2, "UO": 0, "CI": 0, "AC": 1, "RP": 1 } }
+      ],
+      "criterio": "Given un supervisor, When abre la ficha de un colaborador, Then no ve el domicilio.",
+      "evidencia": "Matriz de visibilidad por rol."
+    },
+    {
+      "id": "PER-04",
+      "modulo": "PER",
+      "dimension": "PLA",
+      "nucleo": false,
+      "titulo": "Perfil tras el cese",
+      "pregunta": "¿Qué pasa con el perfil cuando el colaborador deja la empresa?",
+      "hoepman": ["Minimizar", "Hacer cumplir"],
+      "normas": [
+        { "ref": "Ley 29733, art. 8 (calidad y conservación)", "tipo": "obligacion-peru", "verificar": true },
+        { "ref": "Reglamento DS 016-2024-JUS, art. III.2 (bloqueo)", "tipo": "obligacion-peru" },
+        { "ref": "Plazo legal de conservación de registros laborales", "tipo": "obligacion-peru", "verificar": true }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "El perfil sigue activo y visible indefinidamente", "efectos": { "RT": -2, "EL": -2, "UO": 0, "CI": 1, "AC": -1, "RP": -1 } },
+        { "id": "b", "zona": "A", "etiqueta": "Se oculta, pero no hay plazo de supresión", "efectos": { "RT": 0, "EL": 0, "UO": 0, "CI": 1, "AC": 0, "RP": 0 } },
+        { "id": "c", "modo": "B", "zona": "V", "etiqueta": "Se desactiva al cese; bloqueo y supresión al vencer el plazo legal", "efectos": { "RT": 2, "EL": 2, "UO": 0, "CI": -1, "AC": 1, "RP": 1 } }
+      ],
+      "criterio": "Given un colaborador cesado, When se registra su baja, Then su perfil deja de ser visible ese mismo día y se programa su supresión al vencer el plazo legal.",
+      "evidencia": "Política de retención y log de supresiones."
+    },
+    {
+      "id": "ASI-01",
+      "modulo": "ASI",
+      "dimension": "CAN",
+      "nucleo": true,
+      "titulo": "Método de marcación",
+      "pregunta": "¿Cómo marca asistencia el colaborador?",
+      "hoepman": ["Minimizar", "Controlar"],
+      "normas": [
+        { "ref": "Reglamento DS 016-2024-JUS, art. III.6 (biometría = dato sensible)", "tipo": "obligacion-peru" },
+        { "ref": "Reglamento DS 016-2024-JUS, art. 8 (consentimiento escrito para datos sensibles)", "tipo": "obligacion-peru" },
+        { "ref": "Reglamento DS 016-2024-JUS, art. 3.2 (consentimiento libre)", "tipo": "obligacion-peru" },
+        { "ref": "RGPD, art. 9 y EDPB, Directrices 05/2020", "tipo": "referencia-ue" }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "Biometría facial obligatoria, sin consentimiento escrito", "efectos": { "RT": -2, "EL": -2, "UO": 2, "CI": 1, "AC": -1, "RP": -1 } },
+        { "id": "b", "zona": "A", "etiqueta": "Biometría obligatoria con consentimiento escrito, sin alternativa (¿es libre?)", "efectos": { "RT": -1, "EL": 0, "UO": 2, "CI": 1, "AC": -1, "RP": 0 } },
+        { "id": "c", "zona": "A", "etiqueta": "Biometría opcional, con alternativa disponible", "efectos": { "RT": 1, "EL": 1, "UO": 1, "CI": -1, "AC": 1, "RP": 0 } },
+        { "id": "d", "modo": "B", "zona": "V", "etiqueta": "PIN o QR por defecto; biometría opt-in con consentimiento escrito y alternativa sin penalización", "efectos": { "RT": 2, "EL": 2, "UO": 0, "CI": -1, "AC": 2, "RP": 1 }, "ajustesSector": { "finanzas": { "UO": -1 } } }
+      ],
+      "criterio": "Given un colaborador que no activó la biometría, When marca su ingreso, Then puede hacerlo con PIN o QR y el sistema no le muestra advertencias ni le exige pasos adicionales.",
+      "evidencia": "Consentimientos escritos de biometría y registro de método de marcación elegido."
+    },
+    {
+      "id": "ASI-02",
+      "modulo": "ASI",
+      "dimension": "PLA",
+      "nucleo": true,
+      "titulo": "Conservación de la plantilla facial",
+      "pregunta": "¿Cuánto tiempo y dónde se guarda la plantilla biométrica?",
+      "hoepman": ["Minimizar", "Ocultar"],
+      "normas": [
+        { "ref": "Ley 29733, art. 8 (conservación)", "tipo": "obligacion-peru", "verificar": true },
+        { "ref": "Reglamento DS 016-2024-JUS, arts. 29.5 y 30.4 (supresión por el prestador tercerizado)", "tipo": "obligacion-peru" },
+        { "ref": "Reglamento DS 016-2024-JUS, art. 31.2 (conservación indeterminada prohibida por regla general)", "tipo": "obligacion-peru" }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "Indefinida, en la nube del proveedor, incluso tras el cese", "efectos": { "RT": -2, "EL": -2, "UO": 1, "CI": 1, "AC": -1, "RP": -2 } },
+        { "id": "b", "zona": "R", "etiqueta": "Hasta 12 meses tras el cese, «por si reingresa»", "efectos": { "RT": -1, "EL": -2, "UO": 1, "CI": 1, "AC": 0, "RP": -1 } },
+        { "id": "c", "zona": "A", "etiqueta": "Hasta el cese, con borrado manual por TI", "efectos": { "RT": 0, "EL": 0, "UO": 1, "CI": 1, "AC": 0, "RP": 0 } },
+        { "id": "d", "modo": "B", "zona": "V", "etiqueta": "Supresión automática al cese, con constancia del proveedor", "efectos": { "RT": 1, "EL": 2, "UO": 1, "CI": 0, "AC": 1, "RP": 1 } },
+        { "id": "e", "zona": "V", "etiqueta": "Comparación en el dispositivo; la plantilla nunca sale del celular", "efectos": { "RT": 2, "EL": 2, "UO": 0, "CI": -2, "AC": 2, "RP": 2 } }
+      ],
+      "criterio": "Given un colaborador cesado, When se registra su baja en RR. HH., Then su plantilla facial se suprime en 24 horas y queda un registro de supresión sin datos biométricos.",
+      "evidencia": "Constancia de supresión del proveedor (Reglamento art. 30.4)."
+    },
+    {
+      "id": "ASI-03",
+      "modulo": "ASI",
+      "dimension": "ALC",
+      "nucleo": true,
+      "titulo": "Frecuencia de geolocalización",
+      "pregunta": "¿Cuándo registra la app la ubicación?",
+      "hoepman": ["Minimizar", "Agregar"],
+      "normas": [
+        { "ref": "Reglamento DS 016-2024-JUS, art. III.4 (la localización es dato personal)", "tipo": "obligacion-peru" },
+        { "ref": "Reglamento DS 016-2024-JUS, art. 132.1", "tipo": "obligacion-peru" },
+        { "ref": "Directiva 01-2020-JUS/DGTAIPD (videovigilancia, por analogía)", "tipo": "obligacion-peru", "verificar": true }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "Rastreo continuo 24/7, también fuera de la jornada", "efectos": { "RT": -2, "EL": -2, "UO": 2, "CI": 1, "AC": -2, "RP": -2 } },
+        { "id": "b", "zona": "A", "etiqueta": "Continua solo durante el turno", "efectos": { "RT": -1, "EL": 0, "UO": 1, "CI": 0, "AC": -1, "RP": 0 }, "ajustesSector": { "mineria": { "UO": 2, "AC": 0 } } },
+        { "id": "c", "modo": "B", "zona": "A", "etiqueta": "Solo en el instante de marcar", "efectos": { "RT": 1, "EL": 2, "UO": 0, "CI": 0, "AC": 1, "RP": 1 }, "ajustesSector": { "mineria": { "UO": -1 } } },
+        { "id": "d", "zona": "V", "etiqueta": "Solo «dentro o fuera de la sede», sin coordenadas", "efectos": { "RT": 2, "EL": 2, "UO": -1, "CI": -1, "AC": 2, "RP": 1 }, "ajustesSector": { "mineria": { "UO": -2 } } }
+      ],
+      "criterio": "Given un colaborador fuera de su jornada, When la app está instalada y abierta, Then no se genera ningún registro de ubicación.",
+      "evidencia": "Log de eventos de ubicación con marca de jornada."
+    },
+    {
+      "id": "ASI-04",
+      "modulo": "ASI",
+      "dimension": "ACC",
+      "nucleo": true,
+      "titulo": "Mapa del supervisor",
+      "pregunta": "¿Qué ve el supervisor sobre la ubicación de su equipo?",
+      "hoepman": ["Ocultar", "Agregar"],
+      "normas": [
+        { "ref": "Ley 29733, art. 7 (proporcionalidad)", "tipo": "obligacion-peru", "verificar": true },
+        { "ref": "RGPD, arts. 25.2 y 88", "tipo": "referencia-ue" }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "A", "nota": "Desproporcionado y discutible; si además ASI-03 rastrea fuera de jornada, el conjunto es claramente ilícito.", "etiqueta": "Mapa en vivo de cada persona, con historial de recorridos", "efectos": { "RT": -2, "EL": -1, "UO": 2, "CI": 0, "AC": -2, "RP": -1 } },
+        { "id": "b", "zona": "A", "etiqueta": "Mapa en vivo solo cuando se activa una emergencia, con registro de quién la activó", "efectos": { "RT": 1, "EL": 1, "UO": 1, "CI": -1, "AC": 1, "RP": 0 }, "ajustesSector": { "mineria": { "UO": 2 } } },
+        { "id": "c", "zona": "A", "etiqueta": "Historial solo para RR. HH., con motivo registrado", "efectos": { "RT": 0, "EL": 1, "UO": 1, "CI": -1, "AC": 0, "RP": 0 }, "ajustesSector": { "finanzas": { "UO": 2 } } },
+        { "id": "d", "modo": "B", "zona": "V", "etiqueta": "Solo «marcó / no marcó» y la sede", "efectos": { "RT": 2, "EL": 2, "UO": -1, "CI": 1, "AC": 2, "RP": 1 }, "ajustesSector": { "mineria": { "UO": -2 } } }
+      ],
+      "criterio": "Given un supervisor, When abre el panel de asistencia de su equipo, Then ve solo si cada persona marcó y en qué sede, sin coordenadas ni recorridos.",
+      "evidencia": "Matriz de visibilidad por rol y log de activaciones de emergencia."
+    },
+    {
+      "id": "ASI-05",
+      "modulo": "ASI",
+      "dimension": "PLA",
+      "nucleo": false,
+      "titulo": "Retención del historial de ubicación",
+      "pregunta": "¿Cuánto tiempo se guarda el historial de ubicaciones?",
+      "hoepman": ["Minimizar"],
+      "normas": [
+        { "ref": "Ley 29733, art. 8 (conservación)", "tipo": "obligacion-peru", "verificar": true },
+        { "ref": "Plazo legal de conservación de registros de asistencia", "tipo": "obligacion-peru", "verificar": true }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "Indefinida", "efectos": { "RT": -2, "EL": -2, "UO": 1, "CI": 1, "AC": -1, "RP": -2 } },
+        { "id": "b", "zona": "A", "etiqueta": "12 meses", "efectos": { "RT": -1, "EL": 0, "UO": 1, "CI": 0, "AC": 0, "RP": -1 }, "ajustesSector": { "finanzas": { "UO": 2 } } },
+        { "id": "c", "zona": "A", "etiqueta": "90 días", "efectos": { "RT": 0, "EL": 1, "UO": 0, "CI": 0, "AC": 0, "RP": 0 } },
+        { "id": "d", "modo": "B", "zona": "V", "etiqueta": "Solo el registro de marcación (hora y sede), sin coordenadas, por el plazo laboral", "efectos": { "RT": 2, "EL": 2, "UO": -1, "CI": 0, "AC": 1, "RP": 1 }, "ajustesSector": { "finanzas": { "UO": -2 } } }
+      ],
+      "criterio": "Given un registro de ubicación con más antigüedad que el plazo configurado, When corre el proceso diario de retención, Then el registro se elimina y queda constancia en el log.",
+      "evidencia": "Política de retención y log del proceso de borrado."
+    },
+    {
+      "id": "SAL-01",
+      "modulo": "SAL",
+      "dimension": "ACC",
+      "nucleo": true,
+      "titulo": "Qué ve el jefe directo",
+      "pregunta": "¿Qué información de salud ocupacional ve el jefe?",
+      "hoepman": ["Ocultar", "Separar"],
+      "normas": [
+        { "ref": "Ley 29783, art. 71 (confidencialidad de exámenes médicos)", "tipo": "obligacion-peru" },
+        { "ref": "DS 005-2012-TR, art. 102 (modificado)", "tipo": "obligacion-peru" },
+        { "ref": "Reglamento DS 016-2024-JUS, arts. III.5 y III.6", "tipo": "obligacion-peru" }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "Diagnóstico, resultados de exámenes y medicación", "efectos": { "RT": -2, "EL": -2, "UO": 1, "CI": 1, "AC": -2, "RP": -2 } },
+        { "id": "b", "zona": "R", "etiqueta": "Solo el diagnóstico", "efectos": { "RT": -2, "EL": -2, "UO": 1, "CI": 1, "AC": -1, "RP": -1 } },
+        { "id": "c", "zona": "A", "etiqueta": "Solo «apto / no apto», sin restricciones", "nota": "Más privado, pero el jefe pierde información para asignar tareas seguras.", "efectos": { "RT": 2, "EL": 1, "UO": -2, "CI": 1, "AC": 1, "RP": 0 } },
+        { "id": "d", "modo": "B", "zona": "V", "etiqueta": "Aptitud (apto, apto con restricciones, no apto) y restricciones operativas, sin detalle clínico", "efectos": { "RT": 1, "EL": 2, "UO": 1, "CI": 0, "AC": 1, "RP": 1 } }
+      ],
+      "criterio": "Given un jefe directo con un trabajador «apto con restricciones», When abre la ficha de salud, Then ve la restricción operativa (por ejemplo, «no trabajos en altura») y ningún diagnóstico, examen ni medicamento.",
+      "evidencia": "Matriz de acceso por rol al módulo de salud y log de accesos del médico (Reglamento art. 46.3)."
+    },
+    {
+      "id": "SAL-02",
+      "modulo": "SAL",
+      "dimension": "ACC",
+      "nucleo": true,
+      "titulo": "Reporte de incidentes",
+      "pregunta": "¿Qué se publica cuando ocurre un incidente?",
+      "hoepman": ["Ocultar", "Agregar"],
+      "normas": [
+        { "ref": "Reglamento DS 016-2024-JUS, art. III.5 (dato de salud)", "tipo": "obligacion-peru" },
+        { "ref": "Ley 29783, art. 71", "tipo": "obligacion-peru" }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "Nombre, lesión y detalle médico en el muro del equipo", "efectos": { "RT": -2, "EL": -2, "UO": 0, "CI": 1, "AC": -2, "RP": -2 } },
+        { "id": "b", "zona": "A", "etiqueta": "Nombre y tipo de incidente, visibles para el área", "efectos": { "RT": -1, "EL": 0, "UO": 1, "CI": 1, "AC": -1, "RP": 0 } },
+        { "id": "c", "modo": "B", "zona": "V", "etiqueta": "Detalle solo para SST y el médico; al equipo, un resumen sin nombre para prevención", "efectos": { "RT": 2, "EL": 2, "UO": 1, "CI": 0, "AC": 1, "RP": 1 } }
+      ],
+      "criterio": "Given un incidente registrado, When el equipo abre el muro, Then ve un aviso preventivo sin nombre ni detalle médico.",
+      "evidencia": "Matriz de acceso al módulo de incidentes."
+    },
+    {
+      "id": "SAL-03",
+      "modulo": "SAL",
+      "dimension": "PLA",
+      "nucleo": false,
+      "titulo": "Custodia y plazo de los datos de salud",
+      "pregunta": "¿Dónde y por cuánto tiempo se guardan los datos de salud?",
+      "hoepman": ["Separar", "Hacer cumplir"],
+      "normas": [
+        { "ref": "Ley 29733, arts. 8–9", "tipo": "obligacion-peru", "verificar": true },
+        { "ref": "Plazo de conservación de la historia clínica ocupacional", "tipo": "obligacion-peru", "verificar": true }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "En la misma base de datos de la app, sin plazo", "efectos": { "RT": -2, "EL": -2, "UO": 0, "CI": 2, "AC": -1, "RP": -1 } },
+        { "id": "b", "zona": "A", "etiqueta": "En una base separada, sin plazo definido", "efectos": { "RT": 0, "EL": 0, "UO": 0, "CI": 0, "AC": 0, "RP": 0 } },
+        { "id": "c", "modo": "B", "zona": "V", "etiqueta": "Base separada bajo custodia del médico ocupacional, con plazo según la normativa SST", "efectos": { "RT": 2, "EL": 2, "UO": 0, "CI": -1, "AC": 1, "RP": 1 } }
+      ],
+      "criterio": "Given un usuario sin rol médico, When intenta consultar la base de salud, Then el acceso se deniega y queda registrado.",
+      "evidencia": "Inventario de bancos de datos y log de accesos."
+    },
+    {
+      "id": "IA-01",
+      "modulo": "IA",
+      "dimension": "ALC",
+      "nucleo": false,
+      "titulo": "Acceso del asistente a correo y chats",
+      "pregunta": "¿Qué puede leer el asistente de IA?",
+      "hoepman": ["Minimizar", "Controlar"],
+      "normas": [
+        { "ref": "Ley 29733, arts. 6–7 (finalidad y proporcionalidad)", "tipo": "obligacion-peru", "verificar": true }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "A", "nota": "Desproporcionado: incluye datos de terceros y conversaciones no laborales.", "etiqueta": "Lee automáticamente todos los correos y chats", "efectos": { "RT": -2, "EL": -1, "UO": 2, "CI": 0, "AC": -2, "RP": -1 } },
+        { "id": "b", "zona": "A", "etiqueta": "Solo el calendario corporativo", "efectos": { "RT": 1, "EL": 1, "UO": 0, "CI": 1, "AC": 1, "RP": 0 } },
+        { "id": "c", "modo": "B", "zona": "V", "etiqueta": "Solo lo que el colaborador comparte explícitamente con el asistente", "efectos": { "RT": 2, "EL": 2, "UO": -1, "CI": 0, "AC": 2, "RP": 1 } }
+      ],
+      "criterio": "Given un colaborador que no compartió ningún correo, When usa el asistente, Then el asistente no tiene acceso a su bandeja.",
+      "evidencia": "Registro de permisos del asistente por usuario."
+    },
+    {
+      "id": "IA-02",
+      "modulo": "IA",
+      "dimension": "ALC",
+      "nucleo": true,
+      "titulo": "Uso de las conversaciones por el proveedor",
+      "pregunta": "¿Puede el proveedor usar las conversaciones para mejorar su modelo?",
+      "hoepman": ["Hacer cumplir"],
+      "normas": [
+        { "ref": "Reglamento DS 016-2024-JUS, art. 29.4 (control del responsable)", "tipo": "obligacion-peru" },
+        { "ref": "Reglamento DS 016-2024-JUS, art. 30.1", "tipo": "obligacion-peru" }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "Sí, el proveedor las usa para mejorar su modelo", "efectos": { "RT": -2, "EL": -2, "UO": 0, "CI": 2, "AC": -1, "RP": -2 } },
+        { "id": "b", "zona": "A", "etiqueta": "Solo datos anonimizados, con aviso a los colaboradores", "efectos": { "RT": 0, "EL": 0, "UO": 0, "CI": 1, "AC": 0, "RP": -1 } },
+        { "id": "c", "modo": "B", "zona": "V", "etiqueta": "Desactivado por contrato y por configuración", "efectos": { "RT": 2, "EL": 2, "UO": 0, "CI": -1, "AC": 1, "RP": 2 } }
+      ],
+      "criterio": "Given el contrato con el proveedor de IA, When se revisa la configuración del tenant, Then el uso de datos para entrenamiento está desactivado y consta por escrito.",
+      "evidencia": "Cláusula contractual y captura de la configuración del tenant."
+    },
+    {
+      "id": "IA-03",
+      "modulo": "IA",
+      "dimension": "ALC",
+      "nucleo": true,
+      "titulo": "Insumos para la evaluación de desempeño",
+      "pregunta": "¿Genera el asistente insumos para evaluar al colaborador?",
+      "hoepman": ["Minimizar", "Informar"],
+      "normas": [
+        { "ref": "Reglamento DS 016-2024-JUS, art. III.11 (elaboración de perfiles)", "tipo": "obligacion-peru" },
+        { "ref": "Reglamento DS 016-2024-JUS, art. 6.1.8 (informar decisiones automatizadas)", "tipo": "obligacion-peru" },
+        { "ref": "Reglamento DS 016-2024-JUS, art. 87 y Ley 29733, art. 23 (tratamiento objetivo)", "tipo": "obligacion-peru" }
+      ],
+      "opciones": [
+        { "id": "a", "modo": "A", "zona": "R", "etiqueta": "Genera un «puntaje de productividad» visible para el jefe, sin aviso", "efectos": { "RT": -2, "EL": -2, "UO": 2, "CI": 1, "AC": -2, "RP": -1 }, "ajustesSector": { "telecom": { "UO": 2 } } },
+        { "id": "b", "zona": "R", "etiqueta": "El puntaje define los bonos sin intervención humana", "efectos": { "RT": -2, "EL": -2, "UO": 2, "CI": 2, "AC": -2, "RP": -2 } },
+        { "id": "c", "zona": "A", "etiqueta": "Puntaje visible para el jefe, con aviso y revisión humana", "efectos": { "RT": -1, "EL": 0, "UO": 1, "CI": -1, "AC": -1, "RP": 0 }, "ajustesSector": { "telecom": { "UO": 2 } } },
+        { "id": "d", "modo": "B", "zona": "A", "etiqueta": "Desactivado", "efectos": { "RT": 2, "EL": 2, "UO": -2, "CI": 1, "AC": 1, "RP": 1 }, "ajustesSector": { "telecom": { "UO": -2 } } },
+        { "id": "e", "zona": "V", "etiqueta": "Resumen de actividad visible solo para el propio colaborador", "efectos": { "RT": 1, "EL": 2, "UO": 0, "CI": -1, "AC": 2, "RP": 1 } }
+      ],
+      "criterio": "Given un jefe que prepara la evaluación anual, When abre la ficha del colaborador, Then no existe ningún puntaje, ranking ni inferencia generada por el asistente.",
+      "evidencia": "Registro de funciones de IA activas por tenant (puente con S30)."
+    }
+  ]
+}
