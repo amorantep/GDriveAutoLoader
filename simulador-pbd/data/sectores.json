@@ -1,0 +1,87 @@
+{
+  "version": "1.0.0",
+  "pesos": { "Bajo": 0.5, "Medio": 1, "Alto": 1.5 },
+  "sectores": [
+    {
+      "id": "mineria",
+      "grupo": 1,
+      "nombre": "Minería",
+      "organizacion": "Minera Andina del Sur S.A. (ficticia)",
+      "contexto": "Operación en altura con socavón y campamento, turnos 14×7, 40% de contratistas y sindicato activo.",
+      "peticion": { "quien": "Gerencia de Operaciones", "texto": "Necesito saber dónde está cada persona dentro de mina por si hay un derrumbe." },
+      "decisionesTensas": ["ASI-03", "ASI-04", "SAL-01"],
+      "pesos": { "RT": "Medio", "EL": "Medio", "UO": "Alto", "CI": "Medio", "AC": "Alto", "RP": "Medio" }
+    },
+    {
+      "id": "finanzas",
+      "grupo": 2,
+      "nombre": "Finanzas",
+      "organizacion": "Caja Horizonte (ficticia)",
+      "contexto": "Entidad supervisada por la SBS, sedes en Lima y agencias en provincia, auditoría interna exigente.",
+      "peticion": { "quien": "Auditoría Interna", "texto": "Quiero trazabilidad total de quién estuvo en qué agencia y cuándo, por prevención de fraude." },
+      "decisionesTensas": ["ASI-05", "ASI-04", "IA-01"],
+      "pesos": { "RT": "Medio", "EL": "Alto", "UO": "Medio", "CI": "Bajo", "AC": "Medio", "RP": "Alto" }
+    },
+    {
+      "id": "publico",
+      "grupo": 3,
+      "nombre": "Sector público",
+      "organizacion": "Programa Nacional Apoyo Rural (ficticio)",
+      "contexto": "Entidad del Estado con programa social, personal CAS y 728, presupuesto anual rígido.",
+      "peticion": { "quien": "Secretaría General", "texto": "La app se financia con el presupuesto de este año; lo que cueste más, no entra. Además, llegó un pedido de acceso a la información pública sobre la asistencia del personal." },
+      "decisionesTensas": ["ASI-01", "ASI-02", "PER-01"],
+      "pesos": { "RT": "Medio", "EL": "Alto", "UO": "Medio", "CI": "Alto", "AC": "Medio", "RP": "Alto" }
+    },
+    {
+      "id": "telecom",
+      "grupo": 4,
+      "nombre": "Telecom / retail",
+      "organizacion": "ConectaMás Tiendas (ficticia)",
+      "contexto": "Cadena con alta rotación de personal en tiendas y técnicos de campo.",
+      "peticion": { "quien": "Gerencia Comercial", "texto": "El asistente debe darme un ranking de productividad por tienda para los bonos del trimestre." },
+      "decisionesTensas": ["IA-03", "ONB-02", "ASI-03"],
+      "pesos": { "RT": "Medio", "EL": "Medio", "UO": "Medio", "CI": "Alto", "AC": "Alto", "RP": "Medio" },
+      "opcional": true,
+      "notaOpcional": "Si hay solo 4 grupos, este sector se elimina y su petición pasa a Finanzas como evento."
+    },
+    {
+      "id": "abogados",
+      "grupo": 5,
+      "nombre": "Estudio de abogados (asesor)",
+      "organizacion": "Estudio Ríos & Asociados (ficticio), asesor externo de Minera Andina del Sur",
+      "contexto": "El cliente minero envía la configuración que su equipo de TI propone y pide un dictamen.",
+      "peticion": { "quien": "Gerencia Legal del cliente minero", "texto": "¿Esta configuración nos expone ante la ANPD o SUNAFIL? Necesitamos su dictamen." },
+      "decisionesTensas": [],
+      "usaPesosDe": "mineria",
+      "modoDictamen": true,
+      "configuracionInicial": "cliente-minero",
+      "tarea": "Revisar la configuración precargada, encontrar las opciones que incumplen la ley, y emitir un dictamen con 3 riesgos y 3 recomendaciones."
+    }
+  ],
+  "presets": {
+    "cliente-minero": {
+      "descripcion": "Configuración propuesta por el cliente minero. Mayormente zona de criterio, con dos opciones rojas escondidas (ASI-03 y SAL-02).",
+      "respuestasOcultas": ["ASI-03", "SAL-02"],
+      "elecciones": {
+        "ONB-01": "c",
+        "ONB-02": "c",
+        "ONB-03": "b",
+        "PER-01": "b",
+        "PER-02": "b",
+        "PER-03": "c",
+        "PER-04": "b",
+        "ASI-01": "b",
+        "ASI-02": "c",
+        "ASI-03": "a",
+        "ASI-04": "b",
+        "ASI-05": "b",
+        "SAL-01": "c",
+        "SAL-02": "a",
+        "SAL-03": "b",
+        "IA-01": "b",
+        "IA-02": "b",
+        "IA-03": "c"
+      }
+    }
+  }
+}

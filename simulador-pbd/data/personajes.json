@@ -1,0 +1,81 @@
+{
+  "version": "1.0.0",
+  "nota": "Personajes y registros 100% ficticios. No usar nombres, empresas ni cargos de los alumnos.",
+  "empresa": "Grupo Operaciones del Perú S.A.C. (ficticia)",
+  "personajes": [
+    {
+      "id": "rosa",
+      "nombre": "Rosa Quispe",
+      "rol": "Operaria de turno",
+      "sede": "Sede Arequipa",
+      "estado": "activa",
+      "supervisor": "jorge",
+      "datos": {
+        "codigo": "C-10482",
+        "area": "Operaciones",
+        "correo": "rquispe@operaciones.pe.example",
+        "celular": "+51 9•• ••• 214",
+        "domicilio": "Calle Los Álamos 118, Cerro Colorado",
+        "nacimiento": "1991-03-14",
+        "estadoCivil": "Casada",
+        "hijos": 2,
+        "redes": "@rosa.q",
+        "contactoEmergencia": "Esposo, +51 9•• ••• 870"
+      },
+      "salud": {
+        "aptitud": "Apto con restricciones",
+        "restriccion": "No trabajos en altura por 60 días",
+        "diagnostico": "Lumbalgia mecánica",
+        "examenes": "Rx columna lumbar, evaluación osteomuscular",
+        "medicacion": "Antiinflamatorio por 10 días"
+      },
+      "incidente": { "fecha": "2026-09-10", "tipo": "Sobreesfuerzo", "detalle": "Dolor lumbar al levantar carga; atención en tópico" },
+      "asistencia": { "marcacionesHoy": 2, "puntosUbicacionModoA": 1440 }
+    },
+    {
+      "id": "jorge",
+      "nombre": "Jorge Salas",
+      "rol": "Supervisor de turno",
+      "sede": "Sede Arequipa",
+      "estado": "activo",
+      "datos": {
+        "codigo": "C-08811",
+        "area": "Operaciones",
+        "correo": "jsalas@operaciones.pe.example"
+      }
+    },
+    {
+      "id": "lucia",
+      "nombre": "Lucía Paredes",
+      "rol": "Analista",
+      "sede": "Sede Lima",
+      "estado": "cesada",
+      "fechaCese": "2026-06-30",
+      "supervisor": "jorge",
+      "datos": {
+        "codigo": "C-11207",
+        "area": "Finanzas",
+        "correo": "lparedes@operaciones.pe.example",
+        "celular": "+51 9•• ••• 553",
+        "domicilio": "Av. Brasil 2240, Pueblo Libre",
+        "nacimiento": "1995-11-02"
+      },
+      "biometria": { "plantillaActivaModoA": true }
+    },
+    {
+      "id": "miguel",
+      "nombre": "Miguel Torres",
+      "rol": "Técnico contratista",
+      "sede": "Campamento Norte",
+      "estado": "activo",
+      "contratista": "Servicios Técnicos Altiplano (ficticia)",
+      "supervisor": "jorge",
+      "datos": {
+        "codigo": "X-30071",
+        "area": "Mantenimiento",
+        "correo": "mtorres@contratista.example",
+        "celular": "+51 9•• ••• 402"
+      }
+    }
+  ]
+}
