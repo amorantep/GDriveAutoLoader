@@ -8,7 +8,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "validate": "tsx scripts/validate.ts"
+    "validate": "tsx scripts/validate.ts",
+    "ensayo": "tsx scripts/codigos-ensayo.ts",
+    "capturas": "node scripts/capturas.mjs",
+    "recorrido": "node scripts/recorrido.mjs"
   },
   "dependencies": {
     "lz-string": "^1.5.0",

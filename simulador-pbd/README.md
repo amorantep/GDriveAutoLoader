@@ -1,6 +1,8 @@
 # Simulador Privacy by Default — paquete para Claude Code
 
-Este paquete contiene la especificación y los datos para construir el simulador de la sesión S23. **Todavía no contiene código de la app:** Claude Code lo genera siguiendo `docs/PLAN.md`.
+Especificación, datos y código del simulador de la sesión S23. Las Fases 0 a 6 de `docs/PLAN.md` están implementadas.
+
+**Archivo listo para usar:** `publicar/simulador-pbd.html` (un solo HTML, sin internet). Se regenera con `npm run build` (sale en `dist/index.html`).
 
 ## Contenido
 
@@ -17,7 +19,26 @@ Este paquete contiene la especificación y los datos para construir el simulador
 
 Para cambiar el contenido (una zona, un efecto, un texto o qué decisiones son núcleo), edita los JSON, no el código.
 
-## Cómo empezar en Claude Code
+## Comandos
+
+```bash
+npm install
+npm run validate   # valida data/*.json
+npm run test       # motor, calibración y códec (Vitest)
+npm run build      # dist/index.html autocontenido
+npm run ensayo     # regenera docs/codigos-ensayo.txt
+npm run capturas   # capturas de los Modos A y B en docs/capturas/
+npm run recorrido  # recorrido con Playwright: criterios de aceptación de las Fases 2 a 5
+```
+
+## Publicar
+
+- **Netlify Drop:** entra a app.netlify.com/drop y arrastra `publicar/simulador-pbd.html` (renómbralo a `index.html` si quieres la URL raíz).
+- **GitHub Pages:** sube el archivo como `index.html` a un repositorio con Pages activado.
+- **Como archivo:** envíalo por WhatsApp o Drive; se abre con doble clic. En `file://` todo funciona, incluido copiar códigos y guardar el avance.
+- Enlaces útiles: `?modo=a`, `?modo=b`, `?modo=taller&sector=mineria`, `?modo=docente`.
+
+## Cómo empezar en Claude Code (histórico)
 
 1. Descomprime la carpeta en tu computadora.
 2. Abre una terminal en esa carpeta y ejecuta `claude`. También puedes abrir la carpeta desde la app de escritorio de Claude Code.

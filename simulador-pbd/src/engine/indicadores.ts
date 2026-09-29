@@ -54,11 +54,21 @@ export function eleccionesModo(datos: Datos, modo: 'A' | 'B'): Record<string, st
   return out;
 }
 
-/** Elecciones iniciales del taller: Modo A, o el preset del sector (p. ej. «cliente-minero» para abogados). */
+/**
+ * SPEC §2 dice que el Taller «parte del Modo A», pero SPEC §4.1 rotula las decisiones no núcleo como
+ * «preconfiguradas en el estado B». Con true, el grupo parte con las núcleo en A y las demás en B;
+ * con false, las 18 parten en A. Decisión pendiente del docente.
+ */
+export const OTRAS_PRECONFIGURADAS_EN_B = true;
+
+/** Elecciones iniciales del taller: Modo A (ver constante anterior), o el preset del sector (p. ej. «cliente-minero»). */
 export function eleccionesIniciales(datos: Datos, sectorId: string): Record<string, string> {
   const s = buscarSector(datos, sectorId);
   if (s.configuracionInicial) return { ...datos.sectores.presets[s.configuracionInicial].elecciones };
-  return eleccionesModo(datos, 'A');
+  const a = eleccionesModo(datos, 'A');
+  if (!OTRAS_PRECONFIGURADAS_EN_B) return a;
+  const b = eleccionesModo(datos, 'B');
+  return Object.fromEntries(datos.catalogo.decisiones.map((d) => [d.id, d.nucleo ? a[d.id] : b[d.id]]));
 }
 
 /** base[ind] = 50 + K × Σ peso(sector, ind) × efecto(opElegida, sector)[ind] (sin redondear). */

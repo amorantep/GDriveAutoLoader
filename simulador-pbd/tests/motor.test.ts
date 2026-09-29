@@ -12,6 +12,7 @@ import {
   incumplimientos,
   redondear,
   buscarEvento,
+  OTRAS_PRECONFIGURADAS_EN_B,
 } from '../src/engine/indicadores';
 
 const A = eleccionesModo(DATOS, 'A');
@@ -49,6 +50,11 @@ describe('calibración (docs/PLAN.md, Fase 1)', () => {
 });
 
 describe('preset y eventos', () => {
+  it('el taller parte con las núcleo en A y, según la constante, las demás en B', () => {
+    const el = estadoNuevo(DATOS, 'mineria').elecciones;
+    for (const d of DATOS.catalogo.decisiones) expect(el[d.id]).toBe(d.nucleo || !OTRAS_PRECONFIGURADAS_EN_B ? A[d.id] : B[d.id]);
+  });
+
   it('el preset cliente-minero incumple exactamente por ASI-03 y SAL-02', () => {
     const st = estadoNuevo(DATOS, 'abogados');
     expect(incumplimientos(DATOS, st.elecciones).sort()).toEqual(['ASI-03', 'SAL-02']);
@@ -87,7 +93,7 @@ describe('preset y eventos', () => {
   });
 
   it('los eventos se suman a la base y se recortan a 0–100', () => {
-    const st = estadoNuevo(DATOS, 'mineria');
+    const st = { ...estadoNuevo(DATOS, 'mineria'), elecciones: { ...A } };
     st.eventos['EV-01'] = { decisiones: [], texto: '', eleccionesAntes: { ...A } };
     const r = calcularIndicadores(DATOS, st, 'mineria');
     expect(r.base.RT).toBe(16);
